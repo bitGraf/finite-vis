@@ -7,31 +7,19 @@ Example: Copper bar initially at 0K, both ends are held to 300K and 400K respect
 # Heat Equation
 Differential equation describing how heat diffuses through a medium. Equations of a similar form can be used for general diffusion problems.
 
-<p align="center">
-
-### $\frac{\partial u}{\partial t} = \alpha\nabla^2u $
-
-</p>
+$\frac{\partial u}{\partial t} = \alpha\nabla^2u $
 
 where
 
-$ u(t, x) \rarr $ Temperature at point $x$ at time $t$
+$u(t, x)$ is the temperature at point $x$ at time $t$
 
 In a cartesian plane, the differential equation can be rewritten in terms of the $x, y, z$ components:
 
-<p align="center">
-
-### $\frac{\partial u}{\partial t} = \alpha(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} + \frac{\partial^2 u}{\partial z^2}) $
-
-</p>
+$\frac{\partial u}{\partial t} = \alpha(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} + \frac{\partial^2 u}{\partial z^2}) $
 
 Simplifying to a 1-D case:
 
-<p align="center">
-
-### $\frac{\partial u}{\partial t} = \alpha\frac{\partial^2 u}{\partial x^2} $
-
-</p>
+$\frac{\partial u}{\partial t} = \alpha\frac{\partial^2 u}{\partial x^2} $
 
 ## Finite Difference
 
