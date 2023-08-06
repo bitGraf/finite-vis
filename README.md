@@ -28,6 +28,12 @@ The derivatives can be approximated by discretizing the time and space of the pr
 For a cell $n$ at time $k$ we can formulate the equation using a few differenct schemes:
 
 ### Forward Difference in Time - Central Difference in Space
+$\approx$
+
+$u^{k+1}_{n}$
+
+$u_{n}^{k+1}$
+
 $\frac{\partial u}{\partial t} \approx \frac{u^{k+1}_{n} - u^{k}_{n}}{\Delta t}$
 
 $\frac{\partial^2 u}{\partial x^2} \approx \frac{u^{k}_{n-1} - 2u^{k}_{n} + u^{k}_{n+1}}{\Delta x^2}$
