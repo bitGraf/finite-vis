@@ -4,6 +4,8 @@ Visualizer for finite-difference method solver written in go using OpenGL and GL
 ![Alt text](docs/heat_bar.gif?raw=true)
 Example: Copper bar initially at 0K, both ends are held to 300K and 400K respectively.
 
+<img src="https://latex.codecogs.com/gif.latex?\frac{\partial u}{\partial t} \approx \frac{u^{k+1}_{n} - u^{k}_{n}}{\Delta t}" /> 
+
 # Heat Equation
 Differential equation describing how heat diffuses through a medium. Equations of a similar form can be used for general diffusion problems.
 
