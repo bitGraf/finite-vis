@@ -4,8 +4,6 @@ Visualizer for finite-difference method solver written in go using OpenGL and GL
 ![Alt text](docs/heat_bar.gif?raw=true)
 Example: Copper bar initially at 0K, both ends are held to 300K and 400K respectively.
 
-<img src="https://latex.codecogs.com/gif.latex?\frac{\partial u}{\partial t} \approx \frac{u^{k+1}_{n} - u^{k}_{n}}{\Delta t}" /> 
-
 # Heat Equation
 Differential equation describing how heat diffuses through a medium. Equations of a similar form can be used for general diffusion problems.
 
@@ -30,19 +28,14 @@ The derivatives can be approximated by discretizing the time and space of the pr
 For a cell $n$ at time $k$ we can formulate the equation using a few differenct schemes:
 
 ### Forward Difference in Time - Central Difference in Space
-$\approx$
 
-$u^{k+1}_{n}$
+$$\frac{\partial u}{\partial t} \approx \frac{u^{k+1}_{n} - u^{k}_{n}}{\Delta t}$$
 
-$u_{n}^{k+1}$
-
-$\frac{\partial u}{\partial t} \approx \frac{u^{k+1}_{n} - u^{k}_{n}}{\Delta t}$
-
-$\frac{\partial^2 u}{\partial x^2} \approx \frac{u^{k}_{n-1} - 2u^{k}_{n} + u^{k}_{n+1}}{\Delta x^2}$
+$$\frac{\partial^2 u}{\partial x^2} \approx \frac{u^{k}_{n-1} - 2u^{k}_{n} + u^{k}_{n+1}}{\Delta x^2}$$
 
 Which can be combined and rearranged to get:
 
-$r = \alpha \frac{\Delta t}{\Delta x^2}$
+$$r = \alpha \frac{\Delta t}{\Delta x^2}$$
 
 $u^{k+1}_{n} = ru^{k}_{n-1} + (1 - 2r)u^{k}_{n} + ru^{k}_{n+1}$
 
