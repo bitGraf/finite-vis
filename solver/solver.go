@@ -24,5 +24,20 @@ type BoundaryCondition struct {
 	Value float64
 }
 
+type BoundarySet1D struct {
+	Left  BoundaryCondition
+	Right BoundaryCondition
+}
+
+type BoundarySet2D struct {
+	Top   BoundaryCondition
+	Bot   BoundaryCondition
+	Left  BoundaryCondition
+	Right BoundaryCondition
+}
+
 // u0(x,L) = ...
 type bar_init_fcn func(float64, float64) float64
+
+// u0(x,y,W,H) = ...
+type plate_init_fcn func(float64, float64, float64, float64) float64
