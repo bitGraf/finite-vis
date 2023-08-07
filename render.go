@@ -48,7 +48,7 @@ func (this *Renderer) Init(width, height int) {
 
 	// create simple shader
 	vertSrc := `
-		#version 410
+		#version 150
 		in vec3 vp;
 
 		// coords in range [0,1] from bottom left corner
@@ -62,7 +62,7 @@ func (this *Renderer) Init(width, height int) {
 		}
 	` + "\x00" // null-terminate so C-bindings can handle it
 	fragSrc := `
-		#version 410
+		#version 150
 		out vec4 frag_colour;
 
 		uniform vec3 color;

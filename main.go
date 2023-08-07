@@ -132,7 +132,11 @@ func main() {
 	}
 
 	// Create heat bar
-	bar.Create(100, 1.0, 300, 400, 111.0, func(x, L float64) float64 { return 0 })
+	B1 := solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 300}
+	B2 := solver.BoundaryCondition{Type: solver.ConstantFlux, Value: 0}
+	//dist := func(x, L float64) float64 { return 400 * (1 - math.Abs(x-(L/2))) }
+	dist := func(x, K float64) float64 { return 0 }
+	bar.Create(20, 1.0, B1, B2, 111.0, dist)
 
 	//gl.ClearColor(0.4, 0.2, 0.5, 1.0)
 	gl.ClearColor(0.3, 0.3, 0.3, 1.0)
@@ -152,6 +156,8 @@ func main() {
 		case solver.CrankNicolson:
 			bar.Update_CTCS()
 		}
+
+		//window.window.SetShouldClose(true)
 
 		glfw.PollEvents()
 		window.SwapBuffers()
