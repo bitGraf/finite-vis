@@ -191,6 +191,7 @@ func main() {
 		renderer.font.Printf(12, (1-ypos)*float32(height)-12, 0.5, "%.0fK", min_temp)
 		renderer.font.Printf(float32(width-80), (1-ypos)*float32(height)-12, 0.5, "%.0fK", max_temp)
 	}
+
 	/*
 		DrawHeatBar := func(u []float64, width, height int, min_temp, max_temp float64) {
 			N := len(u) - 1
@@ -256,9 +257,9 @@ func main() {
 
 	// Create heat plate
 	B := solver.BoundarySet2D{
-		Top:   solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 0},
+		Top:   solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 300},
 		Right: solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 300},
-		Bot:   solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 0},
+		Bot:   solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 300},
 		Left:  solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 300},
 	}
 	peaks := func(x, y, W, H float64) float64 {
@@ -299,7 +300,7 @@ func main() {
 	_ = peaks(0, 0, 0, 0)
 	_ = sinc_2d(0, 0, 0, 0)
 	_ = zero_2d(0, 0, 0, 0)
-	plate.Create(101, 101, 1, 1, B, 111.0, sinc_2d)
+	plate.Create(101, 101, 1, 1, B, 111.0, zero_2d)
 
 	//gl.ClearColor(0.4, 0.2, 0.5, 1.0)
 	gl.ClearColor(0.3, 0.3, 0.3, 1.0)
@@ -333,6 +334,7 @@ func main() {
 				case solver.CrankNicolson:
 					//bar.Update_CTCS()
 				}
+
 			}
 
 			/*

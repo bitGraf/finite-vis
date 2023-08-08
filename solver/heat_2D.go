@@ -1,7 +1,5 @@
 package solver
 
-import "math"
-
 type Heat_2D_plate struct {
 	N int // number of spatial points: x
 	M int // number of spatial points: y
@@ -47,9 +45,8 @@ func (b *Heat_2D_plate) Create(num_points_x, num_points_y int, plate_width, plat
 	b.u0 = u0
 
 	// calc delt to enforce stability
-	max_delt_x := (0.5) * b.delx * b.delx / alpha
-	max_delt_y := (0.5) * b.dely * b.dely / alpha
-	b.delt = 0.7 * math.Min(max_delt_x, max_delt_y) // idk if this makes any sense...
+	max_delt := 0.5 * b.delx * b.delx * b.dely * b.dely / (alpha * (b.delx*b.delx + b.dely*b.dely))
+	b.delt = max_delt
 
 	b.rx = alpha * b.delt / (b.delx * b.delx)
 	b.ry = alpha * b.delt / (b.dely * b.dely)
@@ -111,7 +108,7 @@ func (b *Heat_2D_plate) Update_FTCS() {
 	switch b.B.Top.Type {
 	case ConstantTemp:
 		T := b.B.Top.Value
-		for n := 1; n <= b.N; n++ {
+		for n := 1; n < b.N; n++ {
 			b.U[n][0] = T
 		}
 	case ConstantFlux:
@@ -120,7 +117,7 @@ func (b *Heat_2D_plate) Update_FTCS() {
 	switch b.B.Right.Type {
 	case ConstantTemp:
 		T := b.B.Right.Value
-		for m := 1; m <= b.M; m++ {
+		for m := 1; m < b.M; m++ {
 			b.U[b.N][m] = T
 		}
 	case ConstantFlux:
@@ -129,7 +126,7 @@ func (b *Heat_2D_plate) Update_FTCS() {
 	switch b.B.Bot.Type {
 	case ConstantTemp:
 		T := b.B.Bot.Value
-		for n := b.N - 1; n >= 0; n-- {
+		for n := 1; n < b.N; n++ {
 			b.U[n][b.M] = T
 		}
 	case ConstantFlux:
@@ -138,7 +135,7 @@ func (b *Heat_2D_plate) Update_FTCS() {
 	switch b.B.Left.Type {
 	case ConstantTemp:
 		T := b.B.Left.Value
-		for m := b.M - 1; m >= 0; m-- {
+		for m := 1; m < b.M; m++ {
 			b.U[0][m] = T
 		}
 	case ConstantFlux:
