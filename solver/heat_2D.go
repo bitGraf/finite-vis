@@ -1,27 +1,32 @@
 package solver
 
+// square plate
 type Heat_2D_plate struct {
-	N int // number of spatial points: x
-	M int // number of spatial points: y
+	N int // number of spatial points: N = M
 
-	Width, Height float64 // Dimmensions of plate
-	alpha         float64 // thermal diffusivity (for the form du/dt = alpha * d2u/d2x)
+	L     float64 // Dimmensions of plate (Width = Height)
+	alpha float64 // thermal diffusivity (for the form du/dt = alpha * d2u/d2x)
 
-	delx, dely, delt float64 // time/space steps
+	delx, delt float64 // time/space steps delx=dely
 
 	// boundary conditions
 	B  BoundarySet2D
 	u0 plate_init_fcn
 
-	U      [][]float64
-	u_last [][]float64
+	U      Matrix
+	u_last Matrix
 	x, y   []float64
 
 	CurrentTime float64
 	K           int
 
 	// internal params
-	rx, ry float64
+	r float64
+
+	// for BTCS
+	F, F_inv, G Matrix
+	Bp_inv, Cp  []Matrix
+	Dp          []Row_vec
 
 	/*
 		a []float64
@@ -34,22 +39,18 @@ type Heat_2D_plate struct {
 	*/
 }
 
-func (b *Heat_2D_plate) Create(num_points_x, num_points_y int, plate_width, plate_height float64, B BoundarySet2D, alpha float64, u0 plate_init_fcn) {
-	b.N = num_points_x
-	b.M = num_points_y
-	b.Width = plate_width
-	b.Height = plate_height
-	b.delx = plate_width / float64(num_points_x)
-	b.dely = plate_height / float64(num_points_y)
+func (b *Heat_2D_plate) Create(num_points int, plate_width float64, B BoundarySet2D, alpha float64, u0 plate_init_fcn) {
+	b.N = num_points
+	b.L = plate_width
+	b.delx = plate_width / float64(num_points)
 	b.B = B
 	b.u0 = u0
 
 	// calc delt to enforce stability
-	max_delt := 0.5 * b.delx * b.delx * b.dely * b.dely / (alpha * (b.delx*b.delx + b.dely*b.dely))
-	b.delt = max_delt
+	max_delt := 0.5 * b.delx * b.delx * b.delx * b.delx / (alpha * (b.delx*b.delx + b.delx*b.delx))
+	b.delt = 100 * max_delt
 
-	b.rx = alpha * b.delt / (b.delx * b.delx)
-	b.ry = alpha * b.delt / (b.dely * b.dely)
+	b.r = alpha * b.delt / (b.delx * b.delx)
 	/*
 		b.a = make([]float64, num_points+1)
 		b.b = make([]float64, num_points+1)
@@ -61,45 +62,42 @@ func (b *Heat_2D_plate) Create(num_points_x, num_points_y int, plate_width, plat
 	*/
 
 	// allocate memory for data
-	b.x = make([]float64, num_points_x+1)
-	for i := 0; i <= num_points_x; i++ {
+	b.x = make([]float64, num_points+1)
+	for i := 0; i <= num_points; i++ {
 		b.x[i] = float64(i) * b.delx
 	}
-	b.y = make([]float64, num_points_y+1)
-	for i := 0; i <= num_points_y; i++ {
-		b.y[i] = float64(i) * b.dely
+	b.y = make([]float64, num_points+1)
+	for i := 0; i <= num_points; i++ {
+		b.y[i] = float64(i) * b.delx
 	}
 
-	b.U = make([][]float64, num_points_x+1)
-	for n := 0; n <= num_points_x; n++ {
-		b.U[n] = make([]float64, num_points_y+1)
+	b.U = Make_matrix(num_points + 1)
+	for n := 0; n <= num_points; n++ {
+		b.U[n] = make([]float64, num_points+1)
 	}
 
-	b.u_last = make([][]float64, num_points_x+1)
-	for n := 0; n <= num_points_x; n++ {
-		b.u_last[n] = make([]float64, num_points_y+1)
-	}
+	b.u_last = Make_matrix(num_points + 1)
 
 	// initialize using the user supplied function
 	b.Reset()
 }
 
 func (b *Heat_2D_plate) Reset() {
-	for n := 0; n <= b.N; n++ {
-		x := b.x[n]
-		for m := 0; m <= b.M; m++ {
-			y := b.y[m]
-			b.U[n][m] = b.u0(x, y, b.Width, b.Height)
+	for r := 0; r <= b.N; r++ {
+		y := b.y[r]
+		for c := 0; c <= b.N; c++ {
+			x := b.x[c]
+			b.U[r][c] = b.u0(x, y, b.L)
 		}
 	}
 
 	b.CurrentTime = 0
 	b.K = 0
+
+	//Print_matrix(b.U)
 }
 
 func (b *Heat_2D_plate) Update_FTCS() {
-	rx := b.rx
-	ry := b.ry
 	b.CurrentTime += b.delt
 	b.K++
 
@@ -108,8 +106,8 @@ func (b *Heat_2D_plate) Update_FTCS() {
 	switch b.B.Top.Type {
 	case ConstantTemp:
 		T := b.B.Top.Value
-		for n := 1; n < b.N; n++ {
-			b.U[n][0] = T
+		for c := 1; c < b.N; c++ {
+			b.U[0][c] = T
 		}
 	case ConstantFlux:
 	}
@@ -117,8 +115,8 @@ func (b *Heat_2D_plate) Update_FTCS() {
 	switch b.B.Right.Type {
 	case ConstantTemp:
 		T := b.B.Right.Value
-		for m := 1; m < b.M; m++ {
-			b.U[b.N][m] = T
+		for r := 1; r < b.N; r++ {
+			b.U[r][b.N] = T
 		}
 	case ConstantFlux:
 	}
@@ -126,8 +124,8 @@ func (b *Heat_2D_plate) Update_FTCS() {
 	switch b.B.Bot.Type {
 	case ConstantTemp:
 		T := b.B.Bot.Value
-		for n := 1; n < b.N; n++ {
-			b.U[n][b.M] = T
+		for c := 1; c < b.N; c++ {
+			b.U[b.N][c] = T
 		}
 	case ConstantFlux:
 	}
@@ -135,142 +133,193 @@ func (b *Heat_2D_plate) Update_FTCS() {
 	switch b.B.Left.Type {
 	case ConstantTemp:
 		T := b.B.Left.Value
-		for m := 1; m < b.M; m++ {
-			b.U[0][m] = T
+		for r := 1; r < b.N; r++ {
+			b.U[r][0] = T
 		}
 	case ConstantFlux:
 	}
 
-	for n := 1; n <= (b.N - 1); n++ {
-		left := b.u_last[n-1]
-		cent := b.u_last[n]
-		right := b.u_last[n+1]
-		for m := 1; m <= (b.M - 1); m++ {
-			b.U[n][m] = cent[m] + rx*(left[m]-2*cent[m]+right[m]) + ry*(cent[m-1]-2*cent[m]+cent[m+1])
+	for r := 1; r <= (b.N - 1); r++ {
+		above := b.u_last[r-1]
+		cent := b.u_last[r]
+		below := b.u_last[r+1]
+		for c := 1; c <= (b.N - 1); c++ {
+			b.U[r][c] = cent[c] + b.r*(above[c]-2*cent[c]+below[c]) + b.r*(cent[c-1]-2*cent[c]+cent[c+1])
 		}
 	}
 }
 
-/*
-func (b *Heat_1D_bar) Update_BTCS() {
-	r := b.r
-	b.CurrentTime += b.delt
-
-	copy(b.u_last, b.U)
-
-	// construct tridagonal coefficients
-	switch b.B1.Type {
-	case ConstantTemp:
-		//b.a[0] unused
-		b.b[0] = 1
-		b.c[0] = 0
-		b.d[0] = b.B1.Value
-	case ConstantFlux:
-		k1 := b.B1.Value
-		//b.a[0] unused
-		b.b[0] = 1 + r
-		b.c[0] = -r
-		b.d[0] = b.u_last[0] - r*k1*b.delx
+func calc_Bn(Bp, Cp_prev, F, G Matrix) {
+	// G is diagonal (except 0 at the ends)
+	N := len(Bp)
+	for r := 0; r < N; r++ {
+		k := G[r][r]
+		for c := 0; c < N; c++ {
+			Bp[r][c] = F[r][c] - Cp_prev[r][c]*k
+		}
 	}
+}
+func calc_Cn(Cp, Bp_inv, G Matrix) {
+	// G is diagonal (except 0 at the ends)
+	Matrix_mul(Cp, Bp_inv, G)
+}
 
-	b.cp[0] = b.c[0] / b.b[0]
-	b.dp[0] = b.d[0] / b.b[0]
-
-	for i := 1; i < b.N; i++ {
-		b.a[i] = -r
-		b.b[i] = 1 + 2*r
-		b.c[i] = -r
-		b.d[i] = b.u_last[i]
-
-		// reduced c coeffiecient
-		b.cp[i] = b.c[i] / (b.b[i] - b.a[i]*b.cp[i-1])
-
-		// reduced d coeffiecient
-		b.dp[i] = (b.d[i] - b.a[i]*b.dp[i-1]) / (b.b[i] - b.a[i]*b.cp[i-1])
+func make_matrix_arr(size, num int) []Matrix {
+	arr := make([]Matrix, num)
+	for n := 0; n < num; n++ {
+		arr[n] = Make_matrix(size)
 	}
+	return arr
+}
 
-	switch b.B2.Type {
-	case ConstantTemp:
-		b.a[b.N] = 0
-		b.b[b.N] = 1
-		// b.c[b.N] unused
-		b.d[b.N] = b.B2.Value
-	case ConstantFlux:
-		k2 := b.B2.Value
-		b.a[b.N] = -r
-		b.b[b.N] = 1 + r
-		// b.c[b.N] unused
-		b.d[b.N] = b.u_last[b.N] + r*k2*b.delx
+func make_vec_arr(size, num int) []Row_vec {
+	arr := make([]Row_vec, num)
+	for n := 0; n < num; n++ {
+		arr[n] = make(Row_vec, size)
 	}
+	return arr
+}
 
-	// b.cp[b.N] unused
-	b.dp[b.N] = (b.d[b.N] - b.a[b.N]*b.dp[b.N-1]) / (b.b[b.N] - b.a[b.N]*b.cp[b.N-1])
-
-	// substitue back using these new coefficients
-	b.U[b.N] = b.dp[b.N]
-	for i := (b.N - 1); i >= 0; i-- {
-		b.U[i] = b.dp[i] - b.cp[i]*b.U[i+1]
+func copy_matrix(dst, src Matrix) {
+	N := len(dst)
+	for n := 0; n < N; n++ {
+		copy(dst[n], src[n])
 	}
 }
 
-func (b *Heat_1D_bar) Update_CTCS() {
+func (b *Heat_2D_plate) Init_BTCS() {
 	r := b.r
-	b.CurrentTime += b.delt
+	N := b.N
 
-	copy(b.u_last, b.U)
+	f := 1 + 4*r
+	g := -r
 
-	// construct tridagonal coefficients
-	switch b.B1.Type {
-	case ConstantTemp:
-		//b.a[0] unused
-		b.b[0] = 1
-		b.c[0] = 0
-		b.d[0] = b.B1.Value
-	case ConstantFlux:
-		k1 := b.B1.Value
-		//b.a[0] unused
-		b.b[0] = 2 + r
-		b.c[0] = -r
-		b.d[0] = (2-r)*b.u_last[0] + r*b.u_last[1] - 2*r*k1*b.delx
+	b.F = Make_matrix(N + 1)
+	b.G = Make_matrix(N + 1)
+
+	b.F[0][0] = 1
+	b.F[N][N] = 1
+	for n := 1; n < N; n++ {
+		b.F[n][n-1] = g
+		b.F[n][n] = f
+		b.F[n][n+1] = g
+
+		b.G[n][n] = g
 	}
 
-	b.cp[0] = b.c[0] / b.b[0]
-	b.dp[0] = b.d[0] / b.b[0]
+	b.F_inv = Make_matrix(N + 1)
+	Invert_gauss(b.F, b.F_inv)
 
-	for i := 1; i < b.N; i++ {
-		b.a[i] = -r
-		b.b[i] = 2 + 2*r
-		b.c[i] = -r
-		b.d[i] = r*b.u_last[i-1] + (2-2*r)*b.u_last[i] + r*b.u_last[i+1]
+	b.Cp = make_matrix_arr(N+1, N-2)
+	b.Bp_inv = make_matrix_arr(N+1, N-1)
+	b.Dp = make_vec_arr(N+1, N-1)
 
-		// reduced c coeffiecient
-		b.cp[i] = b.c[i] / (b.b[i] - b.a[i]*b.cp[i-1])
-
-		// reduced d coeffiecient
-		b.dp[i] = (b.d[i] - b.a[i]*b.dp[i-1]) / (b.b[i] - b.a[i]*b.cp[i-1])
+	copy_matrix(b.Bp_inv[0], b.F_inv)
+	calc_Cn(b.Cp[0], b.F_inv, b.G)
+	for i := 1; i < (N - 2); i++ {
+		calc_Bn(b.Bp_inv[i], b.Cp[i-1], b.F, b.G)
+		Invert_gauss(b.Bp_inv[i], b.Bp_inv[i]) // TODO: invert in place with no alloc
+		calc_Cn(b.Cp[i], b.Bp_inv[i], b.G)
 	}
-
-	switch b.B2.Type {
-	case ConstantTemp:
-		b.a[b.N] = 0
-		b.b[b.N] = 1
-		// b.c[b.N] unused
-		b.d[b.N] = b.B2.Value
-	case ConstantFlux:
-		k2 := b.B2.Value
-		b.a[b.N] = -r
-		b.b[b.N] = 2 + r
-		// b.c[b.N] unused
-		b.d[b.N] = r*b.u_last[b.N-1] + (2-r)*b.u_last[b.N] + 2*r*k2*b.delx
-	}
-
-	// b.cp[b.N] unused
-	b.dp[b.N] = (b.d[b.N] - b.a[b.N]*b.dp[b.N-1]) / (b.b[b.N] - b.a[b.N]*b.cp[b.N-1])
-
-	// substitue back using these new coefficients
-	b.U[b.N] = b.dp[b.N]
-	for i := (b.N - 1); i >= 0; i-- {
-		b.U[i] = b.dp[i] - b.cp[i]*b.U[i+1]
-	}
+	calc_Bn(b.Bp_inv[N-2], b.Cp[N-3], b.F, b.G)
+	Invert_gauss(b.Bp_inv[N-2], b.Bp_inv[N-2]) // TODO: invert in place with no alloc
 }
-*/
+
+func (b *Heat_2D_plate) Update_BTCS() {
+	g := -b.r
+	b.CurrentTime += b.delt
+	b.K++
+
+	copy_matrix(b.u_last, b.U)
+
+	num_rows := b.N - 1
+	tmp := make(Row_vec, b.N+1)
+
+	for r := 0; r < num_rows; r++ {
+		// calculate D for each row
+		// first row: D_1 = R_1 - G*R_0
+		// last row:  B_M = R_M - G*R_{M+1}
+
+		//fmt.Println("row ", r+1)
+		//fmt.Println(" R =", b.u_last[r+1])
+
+		if r == 0 {
+			b.U[r+1][0] = b.B.Left.Value
+			b.U[r+1][b.N] = b.B.Right.Value
+			b.Dp[r][0] = b.u_last[r+1][0]
+			for c := 1; c < (b.N); c++ {
+				b.Dp[r][c] = b.u_last[r+1][c] - b.B.Top.Value*g
+
+				b.U[0][c] = b.B.Top.Value
+			}
+			b.Dp[r][b.N] = b.u_last[r+1][b.N]
+		} else if r == (num_rows - 1) { // N-2
+			b.U[r+1][0] = b.B.Left.Value
+			b.U[r+1][b.N] = b.B.Right.Value
+			b.Dp[r][0] = b.u_last[r+1][0]
+			for c := 1; c < (b.N); c++ {
+				b.Dp[r][c] = b.u_last[r+1][c] - b.B.Bot.Value*g
+
+				b.U[b.N][c] = b.B.Bot.Value
+			}
+			b.Dp[r][b.N] = b.u_last[r+1][b.N]
+		} else {
+			b.Dp[r][0] = b.B.Left.Value
+			for c := 1; c <= (b.N); c++ {
+				b.Dp[r][c] = b.u_last[r+1][c]
+			}
+			b.Dp[r][b.N] = b.B.Right.Value
+
+			b.U[r+1][0] = b.B.Left.Value
+			b.U[r+1][b.N] = b.B.Right.Value
+		}
+
+		//fmt.Println(" U[] =", b.U[r+1])
+		//fmt.Println(" D =", b.Dp[r])
+
+		// calculate Dp for each row
+		if r == 0 {
+			//Dp_1 = Bp_inv_1*D_1
+			Matrix_vec_mul(tmp, b.Bp_inv[r], b.Dp[r])
+			copy(b.Dp[r], tmp)
+		} else if r == (num_rows - 1) { // N-2
+			//Dp_{M-1} = Bp_inv_{M-1}*D_{M-1}
+			// G*Dp_{i-1} -> G is diagonal, so == g*Dp_{i-1}
+			for c := 1; c < (b.N); c++ {
+				b.Dp[r][c] = b.Dp[r][c] - g*b.Dp[r-1][c]
+			}
+			Matrix_vec_mul(tmp, b.Bp_inv[r], b.Dp[r])
+			copy(b.Dp[r], tmp)
+		} else {
+			//Dp_i = Bp_inv_i*(D_i - G*Dp_{i-1})
+			// G*Dp_{i-1} -> G is diagonal, so == g*Dp_{i-1}
+			for c := 1; c < (b.N); c++ {
+				b.Dp[r][c] = b.Dp[r][c] - g*b.Dp[r-1][c]
+			}
+			Matrix_vec_mul(tmp, b.Bp_inv[r], b.Dp[r])
+			copy(b.Dp[r], tmp)
+		}
+
+		//fmt.Println(" Dp =", b.Dp[r])
+	}
+
+	// back-substitute to calculate X
+	X := make(Row_vec, b.N+1)
+	copy(X, b.Dp[num_rows-1]) // i=N-2
+	// X_{M-1} = Dp_{M-1}
+	for c := 1; c < b.N; c++ {
+		b.U[b.N-1][c] = X[c]
+	}
+
+	for r := (num_rows - 2); r >= 0; r-- {
+		// X_i = Dp_i - Cp_i*X_{i+1}
+		Matrix_vec_mul(tmp, b.Cp[r], X) // X is X_{i+1}, tmp is X_i
+
+		for c := 1; c < b.N; c++ {
+			X[c] = b.Dp[r][c] - tmp[c]
+			b.U[r+1][c] = X[c]
+		}
+	}
+
+	//Print_matrix(b.U)
+}

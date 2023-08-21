@@ -16,7 +16,7 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func write_to_image(filename string, u [][]float64, min_temp, max_temp float64, cell_width, cell_height int, map_type colormap_type, num_bands int) {
+func write_to_image(filename string, u solver.Matrix, min_temp, max_temp float64, cell_width, cell_height int, map_type colormap_type, num_bands int) {
 	N := len(u) - 1
 	M := len(u[0]) - 1
 
@@ -101,9 +101,9 @@ func key_callback(key glfw.Key, scancode int, action glfw.Action, mods glfw.Modi
 			case solver.Forward:
 				plate.Update_FTCS()
 			case solver.Backward:
-				//bar.Update_BTCS()
+				plate.Update_BTCS()
 			case solver.CrankNicolson:
-				//bar.Update_CTCS()
+				//plate.Update_CTCS()
 			}
 		}
 	}
@@ -125,6 +125,12 @@ var (
 )
 
 func main() {
+	m := solver.Make_matrix(4)
+	m[0][0] = 1
+	m[0][1] = 2
+
+	fmt.Println("m =", m)
+
 	// set these by command-line args
 	colormap_name := flag.String("cmap", "plasma", "Name of colormap to use. To get a list of supported maps, use -list-cmaps flag")
 	colormap_list := flag.Bool("list-cmaps", false, "Print list of supported maps")
@@ -188,8 +194,10 @@ func main() {
 			renderer.DrawRect(xpos+border_x, ypos+border_y, dx, dy-2*border_y, float32(color[0]), float32(color[1]), float32(color[2]))
 		}
 
-		renderer.font.Printf(12, (1-ypos)*float32(height)-12, 0.5, "%.0fK", min_temp)
-		renderer.font.Printf(float32(width-80), (1-ypos)*float32(height)-12, 0.5, "%.0fK", max_temp)
+		//renderer.font.Printf(12, (1-ypos)*float32(height)-12, 0.5, "%.0fK", min_temp)
+		//renderer.font.Printf(float32(width-80), (1-ypos)*float32(height)-12, 0.5, "%.0fK", max_temp)
+		renderer.font.Printf(12, (1-ypos)*float32(height)-12, 0.5, "%.0fC", min_temp)
+		renderer.font.Printf(float32(width-80), (1-ypos)*float32(height)-12, 0.5, "%.0fC", max_temp)
 	}
 
 	/*
@@ -217,7 +225,7 @@ func main() {
 			}
 		}
 	*/
-	DrawHeatPlate := func(u [][]float64, screen_width, screen_height int, min_temp, max_temp float64) {
+	DrawHeatPlate := func(u solver.Matrix, screen_width, screen_height int, min_temp, max_temp float64) {
 		N := len(u) - 1
 		M := len(u[0]) - 1
 
@@ -232,14 +240,14 @@ func main() {
 
 		start_y := float32(client_height)/float32(screen_height) - dy
 
-		for n := 0; n <= N; n++ {
-			xpos := dx * float32(n)
+		for c := 0; c <= N; c++ {
+			ypos := dy * float32(c)
 
-			col := u[n]
-			for m := 0; m <= M; m++ {
-				ypos := dy * float32(m)
+			col := u[c]
+			for r := 0; r <= M; r++ {
+				xpos := dx * float32(r)
 
-				T := col[m]
+				T := col[r]
 				f := (T - min_temp) / (max_temp - min_temp)
 				color := colormapN(f, map_type, *num_bands)
 
@@ -258,15 +266,15 @@ func main() {
 	// Create heat plate
 	B := solver.BoundarySet2D{
 		Top:   solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 300},
-		Right: solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 300},
-		Bot:   solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 300},
-		Left:  solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 300},
+		Right: solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 200},
+		Bot:   solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 100},
+		Left:  solver.BoundaryCondition{Type: solver.ConstantTemp, Value: 400},
 	}
-	peaks := func(x, y, W, H float64) float64 {
+	peaks := func(x, y, W float64) float64 {
 		// x and y come in on the ranges [0,W] and [0,H]
 		// transform them into the range [-3,3] and [-3,3]
 		x = (x - (W / 2)) * (6 / W)
-		y = (y - (H / 2)) * (6 / H)
+		y = (y - (W / 2)) * (6 / W)
 
 		// peaks function
 		p1 := 3 * (1 - x) * (1 - x) * math.Exp(-x*x-(y+1)*(y+1))
@@ -277,11 +285,11 @@ func main() {
 		// transform to the range [0 300]
 		return (peaks + 5) * 300 / 10
 	}
-	sinc_2d := func(x, y, W, H float64) float64 {
+	sinc_2d := func(x, y, W float64) float64 {
 		// x and y come in on the ranges [0,W] and [0,H]
 		// transform them into the range [-5,5]
 		x = (x - (W / 2)) * (2 / W) * 15
-		y = (y - (H / 2)) * (2 / H) * 15
+		y = (y - (W / 2)) * (2 / W) * 15
 
 		// sinc function = sin(r)/r where r = sqrt(x^2 + y^2)
 		// at r=0, sinc(0) = 1
@@ -294,22 +302,23 @@ func main() {
 		}
 
 		// transform to the range [~, 300]
-		return (sinc)*250 + 50
+		return 1000 * ((sinc)*5/6 + 1/6)
 	}
-	zero_2d := func(x, y, W, H float64) float64 { return 0 }
-	_ = peaks(0, 0, 0, 0)
-	_ = sinc_2d(0, 0, 0, 0)
-	_ = zero_2d(0, 0, 0, 0)
-	plate.Create(101, 101, 1, 1, B, 111.0, zero_2d)
+	zero_2d := func(x, y, W float64) float64 { return 0 }
+	_ = peaks(0, 0, 0)
+	_ = sinc_2d(0, 0, 0)
+	_ = zero_2d(0, 0, 0)
+	plate.Create(101, 1, B, 1.0, zero_2d)
+	plate.Init_BTCS()
 
 	//gl.ClearColor(0.4, 0.2, 0.5, 1.0)
 	gl.ClearColor(0.3, 0.3, 0.3, 1.0)
 	for !window.ShouldClose() {
 		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-		DrawColormap(window.width, window.height, 0, 400)
+		DrawColormap(window.width, window.height, 0, 500)
 		//DrawHeatBar(bar.U, window.width, window.height, 0, 400)
-		DrawHeatPlate(plate.U, window.width, window.height, 0, 400)
+		DrawHeatPlate(plate.U, window.width, window.height, 0, 500)
 
 		renderer.font.SetColor(1.0, 1.0, 1.0, 1.0)
 		renderer.font.Printf(12, -12+float32(*window_height), 0.5, "t = %5.3f ms [%d]", plate.CurrentTime*1000, plate.K)
@@ -330,9 +339,9 @@ func main() {
 				case solver.Forward:
 					plate.Update_FTCS()
 				case solver.Backward:
-					//bar.Update_BTCS()
+					plate.Update_BTCS()
 				case solver.CrankNicolson:
-					//bar.Update_CTCS()
+					//plate.Update_CTCS()
 				}
 
 			}
@@ -344,9 +353,9 @@ func main() {
 				fmt.Printf("Done.\n")
 			*/
 
-			if plate.K >= 1000 {
-				window.window.SetShouldClose(true)
-			}
+			//if plate.K >= 1000 {
+			//	window.window.SetShouldClose(true)
+			//}
 		}
 
 		//window.window.SetShouldClose(true)
